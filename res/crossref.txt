@@ -1,0 +1,42 @@
+1 ghost-door
+2 pellet
+3 pellet-power
+4 start
+
+10 ghost-blinky
+11 ghost-pinky
+12 ghost-inky
+13 ghost-sue
+
+20 door-h
+21 door-v
+22 showlogo
+23 hiscores
+
+100 wall-straight-horiz
+101 wall-straight-vert
+
+105 wall-corner-ll
+106 wall-corner-lr
+107 wall-corner-ul
+108 wall-corner-ur
+
+110 wall-end-b
+111 wall-end-l
+112 wall-end-r
+113 wall-end-t
+
+120 wall-nub
+
+130 wall-t-bottom
+131 wall-t-left
+132 wall-t-right
+133 wall-t-top
+
+140 wall-x a four-way wall
+
+300 glasses ghost glasses
+
+500 x-paintwall
+
+
