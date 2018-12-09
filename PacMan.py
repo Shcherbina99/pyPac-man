@@ -1,4 +1,4 @@
-import sys
+import sys,enum
 
 if sys.version_info < (3, 6):
     print("Use python >= 3.6", file=sys.stderr)
@@ -8,10 +8,12 @@ else:
 
 try:
     import pygame, sys, os, random
+    from pygame.locals import *
 except Exception as e:
     print('Game modules not found: "{}"'.format(e), file=sys.stderr)
     sys.exit()
-
+pygame.mixer.pre_init(22050,16,2,512)
+pygame.mixer.init()
 SCRIPT_PATH = sys.path[0]
 clock = pygame.time.Clock()
 pygame.init()
@@ -29,6 +31,22 @@ ghostcolor[3] = (255, 128, 0, 255)
 ghostcolor[4] = (50, 50, 255, 255)  # blue
 ghostcolor[5] = (255, 255, 255, 255)  # white
 
+snd_pellet = {}
+
+snd_pellet[0] = pygame.mixer.Sound(os.path.join(SCRIPT_PATH,"res","sounds","pellet1.wav"))
+snd_pellet[1] = pygame.mixer.Sound(os.path.join(SCRIPT_PATH,"res","sounds","pellet2.wav"))
+snd_powerpellet = pygame.mixer.Sound(os.path.join(SCRIPT_PATH,"res","sounds","powerpellet.wav"))
+snd_eatgh = pygame.mixer.Sound(os.path.join(SCRIPT_PATH,"res","sounds","eatgh2.wav"))
+snd_fruitbounce = pygame.mixer.Sound(os.path.join(SCRIPT_PATH,"res","sounds","fruitbounce.wav"))
+snd_eatfruit = pygame.mixer.Sound(os.path.join(SCRIPT_PATH,"res","sounds","eatfruit.wav"))
+snd_extralife = pygame.mixer.Sound(os.path.join(SCRIPT_PATH,"res","sounds","extralife.wav"))
+
+class direction(enum.Enum):
+    RIGHT = "Right"
+    LEFT = "Left"
+    UP = "Up"
+    DOWN = "Down"
+
 
 class Game:
     def __init__(self):
@@ -44,7 +62,7 @@ class Game:
         self.mode = 1
         self.modeTimer = 0
 
-        # self.SetMode(3)
+        self.SetMode(3)
 
         self.screenTileSize = (25, 20)
         self.screenSize = (self.screenTileSize[1] * 16, self.screenTileSize[0] * 16)
@@ -56,6 +74,23 @@ class Game:
         self.imGameOver = pygame.image.load(os.path.join(SCRIPT_PATH, "res", "text", "gameover.gif")).convert()
         self.imReady = pygame.image.load(os.path.join(SCRIPT_PATH, "res", "text", "ready.gif")).convert()
         self.imLogo = pygame.image.load(os.path.join(SCRIPT_PATH, "res", "text", "logo.gif")).convert()
+
+    def StartNewGame(self):
+        self.levelNum = 1
+        self.score = 0
+        self.lives = 3
+        self.SetMode(4)
+        thisLevel.LoadLevel(thisGame.GetLevelNum())
+        player.x = player.homeX
+        player.y = player.homeY
+
+    def SetNextLevel(self):
+        self.levelNum += 1
+        self.SetMode(4)
+        thisLevel.LoadLevel(thisGame.GetLevelNum())
+        player.velX = 0
+        player.velY = 0
+        player.anim_pacmanCurrent = player.anim_pacmanS
 
     def defaulthiscorelist(self):
         return [(100000, "Clyde"), (80000, "Inky"), (60000, "Pinky"), (40000, "Pac-man"), (
@@ -172,6 +207,7 @@ class Game:
         extraLifeSet = [25000, 50000, 100000, 150000]
         for specialScore in extraLifeSet:
             if self.score < specialScore and self.score + score >= specialScore:
+                snd_extralife.play()
                 thisGame.lives += 1
         self.score += score
 
@@ -213,13 +249,15 @@ class Level:
                 firstWord = str_splitBySpace[1]
                 if firstWord == "lives":
                     thisGame.lives = int(str_splitBySpace[2])
-                if firstWord == "score":
+
+                elif firstWord == "score":
                     thisGame.score = int(str_splitBySpace[2])
-                if firstWord == "player":
+
+                elif firstWord == "player":
                     player.x = int(str_splitBySpace[2])
                     player.y = int(str_splitBySpace[3])
 
-                if firstWord == "lvlwidth":
+                elif firstWord == "lvlwidth":
                     self.lvlWidth = int(str_splitBySpace[2])
 
                 elif firstWord == "lvlheight":
@@ -278,8 +316,8 @@ class Level:
                             self.SetMapTile((rowNum, k), 0)
 
                         elif thisID >= 10 and thisID <= 13:
-                            # ghosts[thisID - 10].homeX = k * 16
-                            # ghosts[thisID - 10].homeY = rowNum * 16
+                            ghosts[thisID - 10].homeX = k * 16
+                            ghosts[thisID - 10].homeY = rowNum * 16
                             self.SetMapTile((rowNum, k), 0)
 
                         elif thisID == 2:
@@ -322,7 +360,7 @@ class Level:
         if point[1] > thisLevel.lvlWidth - 1 or point[1] < 0:
             return True
         result = thisLevel.GetMapTile(point)
-        return result >= 100 and result <= 199
+        return (result >= 100 and result <= 199) or result == 1
 
     def CheckIfHitWall(self, possiblePlayer, point):
         numCollisions = 0
@@ -345,6 +383,8 @@ class Level:
                         thisLevel.SetMapTile((iRow, iCol), 0)
                         thisLevel.pellets -= 1
                         thisGame.AddToScore(10)
+                        snd_pellet[player.pelletSndNum].play()
+                        player.pelletSndNum = 1 - player.pelletSndNum
                         if thisLevel.pellets == 0:
                             thisGame.levelNum += 1
                             thisLevel.LoadLevel(thisGame.GetLevelNum())
@@ -356,6 +396,7 @@ class Level:
                     elif result == tileID['pellet-power']:
                         thisLevel.SetMapTile((iRow, iCol), 0)
                         thisGame.AddToScore(100)
+                        snd_powerpellet.play()
                     elif result == tileID['door-h']:
                         for i in range(0, thisLevel.lvlWidth, 1):
                             if not i == iCol:
@@ -444,6 +485,7 @@ class Player:
         self.anim_pacmanD = {}
         self.anim_pacmanS = {}
         self.anim_pacmanCurrent = {}
+        self.direction = None
 
         for i in range(1, 9):
             self.anim_pacmanL[i] = pygame.image.load(
@@ -458,10 +500,27 @@ class Player:
 
         self.animFrame = 3
         self.anim_pacmanCurrent = self.anim_pacmanS
+        self.pelletSndNum = 0
 
     def move(self):
         self.nearestRow = int(((self.y + 8) / 16))
         self.nearestCol = int(((self.x + 8) / 16))
+        if self.direction == direction.RIGHT:
+            if not thisLevel.CheckIfHitWall((player.x + player.speed, player.y), (player.nearestRow, player.nearestCol)):
+                player.velX = player.speed
+                player.velY = 0
+        elif self.direction == direction.LEFT:
+            if not thisLevel.CheckIfHitWall((player.x - player.speed, player.y), (player.nearestRow, player.nearestCol)):
+                player.velX = -player.speed
+                player.velY = 0
+        elif self.direction == direction.DOWN:
+            if not thisLevel.CheckIfHitWall((player.x , player.y + player.speed), (player.nearestRow, player.nearestCol)):
+                player.velX = 0
+                player.velY = player.speed
+        elif self.direction == direction.UP:
+            if not thisLevel.CheckIfHitWall((player.x , player.y - player.speed), (player.nearestRow, player.nearestCol)):
+                player.velX = 0
+                player.velY = -player.speed
         if not thisLevel.CheckIfHitWall((self.x + self.velX, self.y + self.velY), (self.nearestRow, self.nearestCol)):
             self.x += self.velX
             self.y += self.velY
@@ -489,34 +548,64 @@ class Player:
                 self.animFrame = 1
 
 
+class ghost():
+
+    def __init__(self, ghostID):
+        self.x = 0
+        self.y = 0
+        self.velX = 0
+        self.velY = 0
+        self.speed = 1
+        self.nearestRow = 0
+        self.nearestCol = 0
+        self.id = ghostID
+
+        # ghost "state" variable
+        # 1 = normal
+        # 2 = vulnerable
+        # 3 = spectacles
+        self.state = 1
+        self.homeX = 0
+        self.homeY = 0
+        self.currentPath = ""
+        self.anim = {}
+
+        for i in range(1, 7, 1):
+            self.anim[i] = pygame.image.load(
+                os.path.join(SCRIPT_PATH, "res", "sprite", "ghost " + str(i) + ".gif")).convert()
+            # change the ghost color in this frame
+            for y in range(0, 16, 1):
+                for x in range(0, 16, 1):
+                    if self.anim[i].get_at((x, y)) == (255, 0, 0, 255):
+                        # default, red ghost body color
+                        self.anim[i].set_at((x, y), ghostcolor[self.id])
+        self.animFrame = 1
+        self.animDelay = 0
+
+
 def CheckInputs(events):
     for event in events:
-        if event.type == pygame.QUIT:
+        if event.type == pygame.QUIT or event.key == pygame.K_ESCAPE:
+            thisLevel.SaveLevel()
+            thisGame.updatehiscores(thisGame.score)
             sys.exit(0)
         if thisGame.mode == 1:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_d or event.key == pygame.K_RIGHT:
-                    player.velX = player.speed
-                    player.velY = 0
+                if pygame.key.get_pressed()[K_RIGHT] or pygame.key.get_pressed()[K_d]:
+                    player.direction = direction.RIGHT
                 elif event.key == pygame.K_a or event.key == pygame.K_LEFT:
-                    player.velX = -player.speed
-                    player.velY = 0
+                    player.direction = direction.LEFT
                 elif event.key == pygame.K_w or event.key == pygame.K_UP:
-                    player.velX = 0
-                    player.velY = -player.speed
+                    player.direction = direction.UP
                 elif event.key == pygame.K_s or event.key == pygame.K_DOWN:
-                    player.velX = 0
-                    player.velY = player.speed
+                    player.direction = direction.DOWN
                 elif event.key == pygame.K_l:
                     thisLevel.LoadLevel("Save")
-                if event.key == pygame.K_ESCAPE:
-                    thisLevel.SaveLevel()
-                    thisGame.updatehiscores(thisGame.score)
-                    sys.exit(0)
-                if thisGame.mode == 3:
-                    if event.key == pygame.K_RETURN:
-                        sys.exit(0)
-                        # thisGame.StartNewGame()
+        if thisGame.mode == 3:
+            if event.key == pygame.K_RETURN:
+                sys.exit(0)
+                # thisGame.StartNewGame()
+
 
 
 
@@ -528,11 +617,17 @@ if __name__ == '__main__':
     thisGame = Game()
     thisLevel = Level()
     player = Player()
-    thisLevel.LoadLevel(thisGame.GetLevelNum())
-    player.x = player.homeX
-    player.y = player.homeY
+    thisGame.StartNewGame()
+    ghosts = {}
+    for i in range(6):
+        ghosts[i] = ghost(i)
     while True:
         CheckInputs(pygame.event.get())
+        if thisGame.mode == 4:
+            thisGame.modeTimer += 1
+            if thisGame.modeTimer == 90:
+                thisGame.SetMode(1)
+                player.direction = direction.LEFT
         player.move()
         screen.blit(img_Background, (0, 0))
         thisLevel.DrawMap()

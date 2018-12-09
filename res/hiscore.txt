@@ -1,0 +1,6 @@
+100000 Clyde
+80000 Inky
+60000 Pinky
+40000 Pac-man
+20000 Blinky
+3850 
